@@ -1,0 +1,97 @@
+============================  
+Problem statement:
+============================
+
+The purpose of this project is to familiarize ourselves with three 
+concepts: basic file system design and implementation, file system image 
+testing, and data serialization/deserialization; To understand various 
+aspects of the FAT32 file system such as cluster based storage, FAT 
+tables, sectors, directory structure, and byte ordering (endianness); 
+and to mount and unmount file system images onto a running Linux system, 
+data serialization (converting data structures into raw bytes for 
+storage or network transmissions), and deserialization (converting 
+serialized bytes into data structures again).
+
+============================
+Steps taken to solve problem
+============================
+
+1. Write code to parse the boot sector
+2. Saved the necessary and relevant values from the boot sector in 
+variables
+3. Accessed the root directory
+
+============================
+Assumptions
+============================
+It is assumed that these programs will be run on machine 20 in MCH 202.
+
+============================
+Problems
+============================
+
+1. It was inconvenient to have to go to the lab and use the designated 
+computer to program. Working around our classes, jobs, and the classes 
+that are held in the classroom led to it being challenging to actually 
+have time that we could go and work on the project and also be able to 
+work together.
+3. Working with other programmers and having to integrate code and learn 
+another person's code was confusing at times.
+
+============================
+Known Bugs
+============================
+
+
+============================
+Division of Labor
+============================
+
+Andreas Adolfsson
+- 
+Tegan Comb
+- Parsing of the boot sector and root directory
+- Documentation
+Justin Duhaime
+- 
+- 
+
+============================
+Slack Days Used
+============================
+
+Tegan Comb - 0
+
+Justin Duhaime - 0
+
+Andreas Adolfsson - 0
+
+============================
+Log
+============================
+
+Worked on reading in the root directory, still confused about how to 
+read in the list of files but wrote equations to calculate offset for 
+start of root directory and read in the read directory
+
+Tried to get the values for DIR_Name and DIR_FileSize for the first 
+entry in the root directory, I am currently getting "A" and "-1" 
+respectively. Did not think that that was right. Emailed the TAs about 
+it
+11/16/15
+
+Finished code that will parse the Boot Sector, gets the necessary values 
+and prints them out. Saved under Desktop/main.c
+11/12/15
+
+Worked on trying to convert from decimal to hex and then back again but 
+couldn't figure it out
+11/10/15
+
+Initially thought that we needed to store each value in a type that was 
+relevant to its size, had issues trying to convert from hex characters 
+to short
+11/9/15
+
+
+
