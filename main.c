@@ -1,3 +1,4 @@
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -8,10 +9,55 @@ typedef struct {
    int argc;
 } UserArgs;
 
-int my_open(UserArgs* userArgs)
+int my_open(UserArgs* userArgs, char* sector, char* names)
 {
+   int i;
+   int x = 0;
+   int result;
+   int high_offset = 0;
+   int low_offset = 0;
 
-   return 0;
+   unsigned int DIR_FstClusHI[2];
+   unsigned int DIR_FstClusLO[2];
+
+   int ClusNum[4];
+
+   // Search through the directory names to make sure that the file exists 
+   for(i = 0; i < 16; i++)
+   {
+      if(names[i] == userArgs->argv[1])
+      {
+	x = 1;
+	result = i; 
+      }
+   }
+
+   if(x == 0)
+   {
+	return -1;
+   }else{
+      // Get the high word and store in little endian order
+      high_offset = (result * 32) + 20; 
+      DIR_FstClusHI[1] = sector[high_offset + 1];
+      DIR_FstClusHI[0] = sector[high_offset];
+
+      // Get the low word and store in little endian order
+      low_offset = (result * 32) + 26;
+      DIR_FstClusLO[1] = sector[low_offset + 1];
+      DIR_FstClusLO[0] = sector[low_offset];
+
+      // Store the two values in the same array in the correct order
+      ClusNum[0] = DIR_FstClusHI[0];
+      ClusNum[1] = DIR_FstClusHI[1];
+      ClusNum[2] = DIR_FstClusLO[0];
+      ClusNum[3] = DIR_FstClusLO[1];
+
+      // Convert stored array by modifying bits and then converting to hex
+      // Get the cluster number
+      result = bitFlip(ClusNum, 4);
+
+      return result;
+   }
 }
 int my_create(UserArgs* userArgs)
 {
@@ -115,10 +161,11 @@ void my_prompt(char* dir)
 
 int main()
 {
-    	FILE * image;
+    FILE * image;
 
-    	char bootSector[512];
+    char bootSector[512];
     char rootDir[512];
+    char dirNames[16];
     char dirInfo[32];
     char * currentDir = (char*)malloc(4);
 
@@ -127,11 +174,11 @@ int main()
     currentDir[2] = 't';
     currentDir[3] = '\0';
 
-    	unsigned int BPB_BytesPerSec;
-    	unsigned int BPB_SecPerClus;
-    	unsigned int BPB_RsvdSecCnt;
-    	unsigned int BPB_NumFATS;
-    	unsigned int BPB_FATSz32;
+    unsigned int BPB_BytesPerSec;
+    unsigned int BPB_SecPerClus;
+    unsigned int BPB_RsvdSecCnt;
+    unsigned int BPB_NumFATS;
+    unsigned int BPB_FATSz32;
     unsigned int BPB_RootClus;
 
     int FirstDataSector;
@@ -145,17 +192,16 @@ int main()
     int h;
     int N;
 
-    	image = fopen("fat32.img", "r");   // Open the image
+    image = fopen("fat32.img", "r");   // Open the image
 
-    	fread(bootSector, 1, 512, image);  // Read the boot sector into 
-a buffer
+    fread(bootSector, 1, 512, image);  // Read the boot sector into a buffer
 
     // Store important values from the boot sector
     BPB_BytesPerSec = getValue(bootSector, 11, 2);
     BPB_SecPerClus = getValue(bootSector, 13, 1);
-    	BPB_RsvdSecCnt = getValue(bootSector, 14, 2);
-    	BPB_NumFATS = getValue(bootSector, 16, 1);
-    	BPB_FATSz32 = getValue(bootSector, 36, 2);
+    BPB_RsvdSecCnt = getValue(bootSector, 14, 2);
+    BPB_NumFATS = getValue(bootSector, 16, 1);
+    BPB_FATSz32 = getValue(bootSector, 36, 2);
     BPB_RootClus = getValue(bootSector, 44, 4);
 
 
@@ -163,14 +209,12 @@ a buffer
 
     FirstDataSector = BPB_RsvdSecCnt + (BPB_NumFATS * BPB_FATSz32);
 
-    FirstSectorofCluster = ((BPB_RootClus - 2) * BPB_SecPerClus) + 
-FirstDataSector;
+    FirstSectorofCluster = ((BPB_RootClus - 2) * BPB_SecPerClus) + FirstDataSector;
 
     offset = FirstSectorofCluster * BPB_BytesPerSec;
 
 
-    // Move the file pointer to the starting location of the root 
-directory
+    // Move the file pointer to the starting location of the root directory
     fseek(image, offset, SEEK_SET);
 
     // Read the root directory into a new buffer
@@ -184,9 +228,9 @@ directory
     	if((rootDir[v] != 15))
     	{
             	for(q=z;q<z+11;q++){
-                    	printf("%c",rootDir[q]);
-   		 // Next step maybe should be to store these into an 
-array
+                    printf("%c",rootDir[q]);
+		    // Store the directory names into an array
+   		    dirNames[z] = dirNames[z] + rootDir[q];
             	}
             	printf("\n");
    	}
@@ -211,45 +255,25 @@ array
 
    	 else if (strcmp(userArgs->argv[0], "open") == 0)
    	 {
-   	  	if (my_open(userArgs) != 0)
+   	  	if (my_open(userArgs, rootDir, dirNames) > 0)
    	  	{
    		 printf("Error: File did not open\n");
    		 continue;
    	  	}
 
-   	  	// get the first cluster number from the specific file
+		int FirstSectorofOpen;
 
-   	  	// N = ? <-- need to get this number to use in the 
-formula
-   	  	// FirstSectorofCluster = ((N - 2) * BPB_SecPerClus) + 
-FirstDataSector;
+		// Plug the first sector cluster of the file into N
+		FirstSectorofOpen = ((BPB_RootClus - (my_open(userArgs, rootDir, dirNames))) * BPB_SecPerClus) + FirstDataSector;
 
-   	  	// get all 32 bits of the file/directory info
-   		 // like how we print the directory contents (only 
-getting the first 11 above for the name)
-   	  	// use the info in the file to get the HI/LO cluster
-   	  	// use those numbers and the fat table to go to each 
-cluster (the next one is the value of the current one, check the slides, 
-end = ffffffff)
-   	  	// testing purposes -> print each cluster's contents to 
-stdout as you go to each (use this in the 'read' command)
-   	 		 // final version wont print the opened file
-
-   	  	// need a data structure to hold the file names/type of 
-opening (read/write/etc) for error checking and such
-   		 // i.e. can't read a file unless it's opened, can't 
-close a file unless it's opened
-
-
+		// Print the contents out in a for loop? 
    	 }
-
    	 else if (strcmp(userArgs->argv[0], "close") == 0)
    	 {
    	  	if (my_close(userArgs) != 0)
    	  	{
    		 printf("Error: File did not close\n");
    	  	}
-
    	  	// check the boolean structure of the list of open files
    	  	// if it's in there, remove it
    	  	// if it's not, return an error
@@ -262,11 +286,6 @@ close a file unless it's opened
    		 printf("Error: File was not created\n");
    	  	}
 
-   		 // using the open() function in a directory with the | 
-CREATE flag will create files
-   		 // but idk if that will create the necessary info in 
-the FAT table and such
-   		 // but it'd be a quick fix type of thing
    	 }
 
    	 else if (strcmp(userArgs->argv[0], "rm") == 0)
@@ -275,8 +294,6 @@ the FAT table and such
    	  	{
    		 printf("Error: File was not removed\n");
    	  	}
-   		 // no idea how to implement rm on the FAT table info 
-and stuff
    	 }
 
    	 else if (strcmp(userArgs->argv[0], "size") == 0)
@@ -286,13 +303,7 @@ and stuff
    		 printf("Error: Size not found\n");
    	  	}
 
-   		 // not 100% sure but..
-   		 // count how many clusters make up the file in the FAT 
-table
-   		 // multiply that by the number of bytes per cluster
-   		 // answer
 
-   		 // return an arror if the file does not exist
    	 }
 
    	 else if (strcmp(userArgs->argv[0], "cd") == 0)
@@ -302,16 +313,6 @@ table
    		 printf("Error: Directory not changed\n");
    	  	}
 
-   		 // save the currentDir variable to a temp variable
-   		 // free the currentDir variable
-   		 // allocate required space for the old directory + 
-'/<new directory>' info
-   		 // set it
-   		 // look in the current directory for the provided 
-directory
-   		 // if it's not there, return an error
-   		 // if it is, change the 'current directory' variable to 
-the new one
    	 }
 
    	 else if (strcmp(userArgs->argv[0], "ls") == 0)
@@ -320,13 +321,6 @@ the new one
    	  	{
    		 printf("Error: No information found\n");
    	  	}
-
-   		 // use the 'current directory' variable to calculate 
-the new rootDir
-   		 // calculate the offset, set that to the bootDir like 
-above
-   		 // loop through and print the contents (should be very 
-similar to the code above overall)
    	 }
 
    	 else if (strcmp(userArgs->argv[0], "mkdir") == 0)
@@ -336,9 +330,7 @@ similar to the code above overall)
    		 printf("Error: Directory not made\n");
    	  	}
 
-   		 // check (like using ls) if the directory name already 
-exists
-   		 // not sure how we're gonna create tho...
+
    	 }
 
    	 else if (strcmp(userArgs->argv[0], "rmdir") == 0)
@@ -348,9 +340,6 @@ exists
    		 printf("Error: Director not removed\n");
    	  	}
 
-   		 // check for error like in mkdir
-   		 // not sure how we're gonna remove tho (should be 
-straight forward after figuring out mkdir tho)
    	 }
 
    	 else if (strcmp(userArgs->argv[0], "read") == 0)
@@ -360,8 +349,6 @@ straight forward after figuring out mkdir tho)
    		 printf("Error: File not read\n");
    	  	}
 
-   		 // copy code from the 'open' command that prints (when 
-we were testing open) and let it print
    	 }
 
    	 else if (strcmp(userArgs->argv[0], "write") == 0)
@@ -391,20 +378,12 @@ int getValue(char* sector, int offset, int size)
     int i;
     int x;
     int e;
-    int f = 0;
-    int c,d;
 
-    unsigned char * dec_array;
     unsigned char * hex_array;
 
-    unsigned char a = 15;
-    unsigned char b = 240;
-
-    dec_array = (unsigned char*)malloc(size);
     hex_array = (unsigned char*)malloc(size*2);
 
-    // Store values from the buffer into the array in their original hex 
-value
+    // Store values from the buffer into the array in their original hex value
     // Stored in little endian order
     for(i = (size - 1); i >= 0; i--)
     {
@@ -412,6 +391,23 @@ value
    	offset = offset + 1;
     }
 
+    res = bitFlip(hex_array, size);
+
+    return res;
+}
+
+int bitFlip(unsigned char* hex_array, int size)
+{
+    int res;
+    int e, c, d;
+    int f = 0;
+
+    unsigned char * dec_array;
+
+    unsigned char a = 15;
+    unsigned char b = 240;
+
+    dec_array = (unsigned char*)malloc(size);
 
     // Use bitwise operators to modify the binary values correctly
     for(e = 0; e < size; e++)
@@ -451,7 +447,4 @@ int convert_dec(unsigned char * dec_array, int size)
    return result;
 
 }
-
-
-
 
